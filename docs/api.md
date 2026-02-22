@@ -5,11 +5,12 @@ All routes are prefixed with /api.
 
 ## Authentication
 - Auth is accepted via Authorization: Bearer <token> or the httpOnly cookie named token.
-- Roles: PLAYER, ADMIN.
+- Roles: PLAYER, ADMIN, COMPANY.
 - Role guards:
   - protect: valid token required
   - adminOnly: ADMIN only
   - playerOnly: PLAYER only
+  - companyOnly: COMPANY only
 
 ## Auth
 - POST /api/auth/register
@@ -23,6 +24,13 @@ All routes are prefixed with /api.
 ## Users
 - GET /api/users/profile/:id
 - PUT /api/users/profile (protect)
+
+## Company Management
+- POST /api/company/register (protect)
+  - Register as a company (user submits application)
+  - Body: { companyName, companyEmail, companyWebsite, type, address, companySize, contactPerson, contactPhone }
+- GET /api/company/profile (protect, companyOnly)
+  - Get company profile for authenticated company
 
 ## Problems
 - GET /api/problems
@@ -59,6 +67,11 @@ All admin routes are protected by protect + adminOnly.
 - GET /api/admin/stats
 - POST /api/admin/announcements
 - GET /api/admin/announcements
+- GET /api/admin/companies
+- GET /api/admin/companies/pending
+- PUT /api/admin/companies/:companyId/approve
+- PUT /api/admin/companies/:companyId/reject
+- PUT /api/admin/companies/:companyId/suspend
 
 ## Leaderboard
 - GET /api/leaderboard/global
