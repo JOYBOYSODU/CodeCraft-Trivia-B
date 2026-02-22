@@ -1,11 +1,24 @@
 const db = require('../config/db');
 const { POINTS, XP, MODE_MULTIPLIERS, PENALTY_PER_WRONG } = require('../config/constants');
 const { calculateFinalRating, calculateLevel } = require('../utils/helpers');
+const { getLanguageId, runAgainstTestCases } = require('../services/judge0.service');
 
 exports.createSubmission = async (req, res) => {
     try {
         const { problem_id, contest_id, language, code } = req.body;
         const playerId = req.player.id;
+
+        if (!problem_id || !language || !code) {
+            return res.status(400).json({ success: false, message: 'problem_id, language, and code are required' });
+        }
+
+        // Resolve Judge0 language ID early so we can fail fast
+        let languageId;
+        try {
+            languageId = getLanguageId(language);
+        } catch (e) {
+            return res.status(400).json({ success: false, message: e.message });
+        }
 
         // Get problem
         const [problems] = await db.execute('SELECT * FROM problem WHERE id = ?', [problem_id]);
@@ -25,7 +38,7 @@ exports.createSubmission = async (req, res) => {
             wrongAttempts = attempts[0].count;
         }
 
-        // Create submission (PENDING)
+        // Create submission record (PENDING state)
         const [result] = await db.execute(
             `INSERT INTO submission (player_id, problem_id, contest_id, language, code, wrong_attempts)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -34,20 +47,31 @@ exports.createSubmission = async (req, res) => {
 
         const submissionId = result.insertId;
 
-        // TODO: In real app, send to judge queue here
-        // For hackathon, we'll simulate judging
-        const verdict = simulateJudge(code, problem);
-        const runtime = Math.floor(Math.random() * 500) + 50;
-        const memory = (Math.random() * 20 + 5).toFixed(2);
+        // Parse and filter test cases — run ALL (including hidden) for final verdict
+        let testCases = [];
+        if (problem.test_cases) {
+            testCases = typeof problem.test_cases === 'string'
+                ? JSON.parse(problem.test_cases)
+                : problem.test_cases;
+        }
 
-        // Update submission with verdict
+        // Run against Judge0
+        const { verdict, runtime_ms, memory_mb } = await runAgainstTestCases({
+            languageId,
+            code,
+            testCases,
+            timeLimitMs: problem.time_limit_ms || 2000,
+            memoryLimitMb: problem.memory_limit_mb || 256,
+        });
+
+        // Update submission with real verdict
         await db.execute(
             `UPDATE submission SET verdict = ?, runtime_ms = ?, memory_mb = ?, 
        points_earned = ? WHERE id = ?`,
             [
                 verdict,
-                runtime,
-                memory,
+                runtime_ms,
+                memory_mb,
                 verdict === 'ACCEPTED' ? problem.points : 0,
                 submissionId
             ]
@@ -63,26 +87,18 @@ exports.createSubmission = async (req, res) => {
             submission: {
                 id: submissionId,
                 verdict,
-                runtime_ms: runtime,
-                memory_mb: parseFloat(memory),
+                runtime_ms,
+                memory_mb,
                 points_earned: verdict === 'ACCEPTED' ? problem.points : 0
             }
         });
     } catch (error) {
         console.error('Create submission error:', error);
-        res.status(500).json({ success: false, message: 'Failed to submit' });
+        res.status(500).json({ success: false, message: 'Failed to submit: ' + error.message });
     }
 };
 
-// Simulated judge for hackathon demo
-function simulateJudge(code, problem) {
-    // 70% acceptance rate for demo
-    const rand = Math.random();
-    if (rand < 0.7) return 'ACCEPTED';
-    if (rand < 0.85) return 'WRONG_ANSWER';
-    if (rand < 0.95) return 'TIME_LIMIT_EXCEEDED';
-    return 'RUNTIME_ERROR';
-}
+
 
 async function handleAcceptedSubmission(playerId, problem, contestId, wrongAttempts) {
     // Check if already solved this problem in this contest

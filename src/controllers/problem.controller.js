@@ -2,26 +2,51 @@ const db = require('../config/db');
 
 exports.getAllProblems = async (req, res) => {
     try {
-        const { difficulty, tag, page = 1, limit = 20 } = req.query;
+        const { difficulty, search, tag, page = 1, limit = 20 } = req.query;
         const offset = (page - 1) * limit;
 
         let query = 'SELECT id, title, difficulty, points, tags, is_active FROM problem WHERE is_active = true';
         const params = [];
 
-        if (difficulty) {
+        // Handle difficulty filter (convert to uppercase)
+        if (difficulty && difficulty.toUpperCase() !== 'ALL') {
             query += ' AND difficulty = ?';
-            params.push(difficulty);
+            params.push(difficulty.toUpperCase()); // ← FIX: Convert to uppercase
+        }
+
+        // Handle search filter
+        if (search && search.trim()) {
+            query += ' AND (title LIKE ? OR JSON_EXTRACT(tags, "$") LIKE ?)';
+            const searchTerm = `%${search.trim()}%`;
+            params.push(searchTerm, searchTerm);
         }
 
         query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
         params.push(parseInt(limit), parseInt(offset));
 
+        console.log('Query:', query);  // Debug log
+        console.log('Params:', params); // Debug log
+
         const [problems] = await db.execute(query, params);
 
-        // Get total count
-        const [countResult] = await db.execute(
-            'SELECT COUNT(*) as total FROM problem WHERE is_active = true'
-        );
+        // Get total count with same filters
+        let countQuery = 'SELECT COUNT(*) as total FROM problem WHERE is_active = true';
+        const countParams = [];
+
+        if (difficulty && difficulty.toUpperCase() !== 'ALL') {
+            countQuery += ' AND difficulty = ?';
+            countParams.push(difficulty.toUpperCase());
+        }
+
+        if (search && search.trim()) {
+            countQuery += ' AND (title LIKE ? OR JSON_EXTRACT(tags, "$") LIKE ?)';
+            const searchTerm = `%${search.trim()}%`;
+            countParams.push(searchTerm, searchTerm);
+        }
+
+        const [countResult] = await db.execute(countQuery, countParams);
+
+        console.log('Problems found:', problems.length); // Debug log
 
         res.json({
             success: true,
@@ -84,7 +109,7 @@ exports.createProblem = async (req, res) => {
                 JSON.stringify(description),
                 JSON.stringify(examples),
                 JSON.stringify(test_cases),
-                difficulty,
+                difficulty.toUpperCase(), // Ensure uppercase
                 points,
                 JSON.stringify(tags),
                 JSON.stringify(starter_code),
@@ -118,7 +143,11 @@ exports.updateProblem = async (req, res) => {
             if (['title', 'description', 'examples', 'test_cases', 'difficulty', 'points',
                 'tags', 'starter_code', 'solution_code', 'time_limit_ms', 'memory_limit_mb', 'is_active'].includes(key)) {
                 fields.push(`${key} = ?`);
-                values.push(typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]);
+                let value = updates[key];
+                if (key === 'difficulty' && typeof value === 'string') {
+                    value = value.toUpperCase();
+                }
+                values.push(typeof value === 'object' ? JSON.stringify(value) : value);
             }
         });
 

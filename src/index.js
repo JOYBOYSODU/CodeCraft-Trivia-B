@@ -11,6 +11,7 @@ const submissionRoutes = require('./routes/submission.routes');
 const playerRoutes = require('./routes/player.routes');
 const adminRoutes = require('./routes/admin.routes');
 const leaderboardRoutes = require('./routes/leaderboard.routes');
+const executeRoutes = require('./routes/execute.routes');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/execute', executeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
