@@ -62,4 +62,22 @@ const playerOnly = async (req, res, next) => {
     next();
 };
 
-module.exports = { protect, adminOnly, playerOnly };
+const companyOnly = async (req, res, next) => {
+    if (req.user.role !== 'COMPANY') {
+        return res.status(403).json({ success: false, message: 'Company access required' });
+    }
+
+    const [rows] = await db.execute(
+        'SELECT * FROM companies WHERE user_id = ?',
+        [req.user.id]
+    );
+
+    if (rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Company profile not found' });
+    }
+
+    req.company = rows[0];
+    next();
+};
+
+module.exports = { protect, adminOnly, playerOnly, companyOnly };

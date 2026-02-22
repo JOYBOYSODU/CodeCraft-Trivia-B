@@ -80,6 +80,36 @@ exports.login = async (req, res) => {
     }
 };
 
+exports.registerAdmin = async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+        if (existing.length > 0) {
+            return res.status(400).json({ success: false, message: 'Email already registered' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        const [result] = await db.execute(
+            'INSERT INTO users (name, email, password, role, status) VALUES (?, ?, ?, ?, ?)',
+            [name, email, hashedPassword, 'ADMIN', 'ACTIVE']
+        );
+
+        const userId = result.insertId;
+        const token = generateToken(userId);
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: { id: userId, name, email, role: 'ADMIN' }
+        });
+    } catch (error) {
+        console.error('Admin register error:', error);
+        res.status(500).json({ success: false, message: 'Admin registration failed' });
+    }
+};
+
 exports.logout = (req, res) => {
     res.cookie('token', '', { maxAge: 0 });
     res.json({ success: true, message: 'Logged out' });
@@ -112,5 +142,93 @@ exports.getMe = async (req, res) => {
     } catch (error) {
         console.error('GetMe error:', error);
         res.status(500).json({ success: false, message: 'Failed to get user' });
+    }
+};
+
+exports.registerCompany = async (req, res) => {
+    try {
+        const {
+            name,
+            email,
+            password,
+            companyName,
+            companyEmail,
+            companyWebsite,
+            type,
+            address,
+            companySize,
+            contactPerson,
+            contactPhone,
+            company_name,
+            company_email,
+            company_website,
+            company_size,
+            contact_person,
+            contact_phone
+        } = req.body;
+
+        const resolvedCompanyName = companyName || company_name || name;
+        const resolvedCompanyEmail = companyEmail || company_email || email;
+        const resolvedCompanyWebsite = companyWebsite || company_website || null;
+        const resolvedCompanySize = companySize || company_size || null;
+        const resolvedContactPerson = contactPerson || contact_person || null;
+        const resolvedContactPhone = contactPhone || contact_phone || null;
+
+        if (!name || !email || !password || !resolvedCompanyName || !resolvedCompanyEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name, email, password, company name, and company email are required'
+            });
+        }
+
+        const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+        if (existing.length > 0) {
+            return res.status(400).json({ success: false, message: 'Email already registered' });
+        }
+
+        const [companyEmailExists] = await db.execute(
+            'SELECT id FROM companies WHERE company_email = ?',
+            [resolvedCompanyEmail]
+        );
+        if (companyEmailExists.length > 0) {
+            return res.status(400).json({ success: false, message: 'Company email already registered' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        const [result] = await db.execute(
+            'INSERT INTO users (name, email, password, role, status) VALUES (?, ?, ?, ?, ?)',
+            [name, email, hashedPassword, 'COMPANY', 'ACTIVE']
+        );
+
+        const userId = result.insertId;
+
+        const [companyResult] = await db.execute(
+            `INSERT INTO companies (user_id, company_name, company_email, company_website, type, address, company_size, contact_person, contact_phone, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+            [
+                userId,
+                resolvedCompanyName,
+                resolvedCompanyEmail,
+                resolvedCompanyWebsite,
+                type || null,
+                address || null,
+                resolvedCompanySize,
+                resolvedContactPerson,
+                resolvedContactPhone
+            ]
+        );
+
+        const token = generateToken(userId);
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: { id: userId, name, email, role: 'COMPANY' },
+            company: { id: companyResult.insertId, status: 'PENDING' }
+        });
+    } catch (error) {
+        console.error('Company register error:', error);
+        res.status(500).json({ success: false, message: 'Company registration failed' });
     }
 };

@@ -1,4 +1,4 @@
-// Authentication Service
+// API Service - Frontend Integration Example
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -55,6 +55,19 @@ export const userService = {
 
     updateProfile: async (data) => {
         const response = await api.put('/users/profile', data);
+        return response.data;
+    }
+};
+
+// Company Service
+export const companyService = {
+    registerAsCompany: async (data) => {
+        const response = await api.post('/company/register', data);
+        return response.data;
+    },
+
+    getCompanyProfile: async () => {
+        const response = await api.get('/company/profile');
         return response.data;
     }
 };
@@ -173,6 +186,7 @@ export const playerService = {
 
 // Admin Service
 export const adminService = {
+    // User Management
     getAllUsers: async () => {
         const response = await api.get('/admin/users');
         return response.data;
@@ -183,11 +197,13 @@ export const adminService = {
         return response.data;
     },
 
+    // Dashboard
     getDashboardStats: async () => {
         const response = await api.get('/admin/stats');
         return response.data;
     },
 
+    // Announcements
     createAnnouncement: async (data) => {
         const response = await api.post('/admin/announcements', data);
         return response.data;
@@ -195,6 +211,32 @@ export const adminService = {
 
     getAnnouncements: async () => {
         const response = await api.get('/admin/announcements');
+        return response.data;
+    },
+
+    // Company Management
+    getAllCompanies: async () => {
+        const response = await api.get('/admin/companies');
+        return response.data;
+    },
+
+    getPendingCompanies: async () => {
+        const response = await api.get('/admin/companies/pending');
+        return response.data;
+    },
+
+    approveCompany: async (companyId, data) => {
+        const response = await api.put(`/admin/companies/${companyId}/approve`, data);
+        return response.data;
+    },
+
+    rejectCompany: async (companyId, data) => {
+        const response = await api.put(`/admin/companies/${companyId}/reject`, data);
+        return response.data;
+    },
+
+    suspendCompany: async (companyId, data) => {
+        const response = await api.put(`/admin/companies/${companyId}/suspend`, data);
         return response.data;
     }
 };
